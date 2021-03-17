@@ -9,9 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## Demonstrate Interaction using Regression Models and Tree-based Methods using Exposome Data from HELIX
+# Question 1
 
-### Load .Rdata file and merge into single data frame
+## Loading and preparing data
 
 Loading data into single data frame.
 
@@ -38,10 +38,31 @@ studydata$ID = NULL
 Data cleaning.
 
 ```{r}
-studydata  = studydata %>% 
-  janitor::clean_names()
+data.rec  = studydata %>% 
+  janitor::clean_names() %>% 
+  mutate(
+    behav = 
+      as.factor(
+        case_when(
+          hs_gen_tot < 60 ~ "0",
+          hs_gen_tot >= 60 ~ "1"))
+  ) %>% 
+  select(-hs_gen_tot,
+         -hs_c_height_none,
+         -hs_c_weight_none,
+         -e3_gac_none,
+         -e3_sex_none,
+         -e3_yearbir_none,
+         -h_age_none,
+         -h_cohort,
+         -h_parity_none,
+         -hs_child_age_none,
+         -hs_asthma,
+         -hs_zbmi_who,
+         -hs_correct_raven,
+         -hs_bmi_c_cat)
 
-summary(studydata)
+summary(data.rec)
 ```
 
 Data exploration.
@@ -53,15 +74,14 @@ missmap(studydata)
 # No missingness observed.
 
 # Exploring continuous/categorical variables of interest
-table.1 = tableby(~ hs_gen_tot + hs_no2_wk_hs_h_log + h_pm_log +
+table.1 = tableby(~ behav + hs_no2_wk_hs_h_log + h_pm_log +
                     h_folic_t1_none + fas_cat_none + hs_hm_pers_none + hs_participation_3cat_none,
-                  data = studydata,
+                  data = data.rec,
         numeric.stats = c("mean","median", "range"))
 summary(table.1, text = TRUE)
-
 ```
 
-The outcome that I am choosing to explore is related to neuro behavior, and internalizing/externalizing behaviors at 6-11 years old via the CBCL scale. The mean of this score is 24.4, median of 20 and a range from 0-133.
+The outcome that I am choosing to explore is related to neuro-behavior, and internalizing/externalizing behaviors at 6-11 years old via the CBCL scale. I have dichotomized the scale at 60, which is a value used in previous research for identifying clinically relevant psychopathology (Biederman et al., 2010).
 
 I chose to explore a few variables related to air pollution, including NO2 concentration (mean: 2.86, median: 2.98; range: 0.95 - 4.81). I also opted to explore concentration of particulate matter (mean: 2.44; median: 2.30; range: 1.55 - 5.24). Within this sample, 53.4% (N=695) of mothers consumed folic acid during pregnancy. 51.4% (N=669) of mothers scored high on the family affluence score. The median number of people leaving in the home was 4 (range: 1-10). The majority (57.5%, N=748) of mothers did not participate in any organizations.
 
@@ -69,10 +89,62 @@ Partitioning data.
 
 ```{r}
 #Partition data for use in demonstration
-train.indices = createDataPartition(y = studydata$e3_bw,p = 0.7,list = FALSE)
-train.data = studydata[train.indices, ]
-test.data = studydata[-train.indices, ]
+train.indices = createDataPartition(y = data.rec$behav, p = 0.7,list = FALSE)
+training = data.rec[train.indices, ]
+testing = data.rec[-train.indices, ]
 ```
+
+# Question 2
+
+## Developing research question
+
+Given available data, and the number of features, my research question of interest will be hypothesis generating. This analysis will aim to determine potential risk factors of internalizing/externalizing behaviors at 6-11 years old, assessed via the CBCL scale.
+
+# Question 3
+
+## Using LASSO for feature selection
+
+```{r, warning = FALSE, message = FALSE}
+set.seed(100)
+
+#Create grid to search lambda
+lambda = 10^seq(-3,3, length = 100)
+
+lasso.m = train(
+  behav ~., 
+  data = training, 
+  method = "glmnet", 
+  trControl = trainControl("cv", number = 10), 
+  tuneGrid = expand.grid(alpha = 0, lambda = lambda)
+)
+
+#Print the values of alpha and lambda that gave best prediction
+lasso.m$bestTune
+
+#Print all of the options examined
+lasso.m$results
+
+# Model coefficients
+coef(lasso.m$finalModel, lasso.m$bestTune$lambda)
+varImp(lasso.m)
+
+# Make predictions
+pred.lasso = predict(lasso.m, training)
+pred.lasso.prob = predict(lasso.m, training, type = "prob")
+
+# Model prediction performance
+eval.results = confusionMatrix(pred.lasso, training$behav, positive = "1")
+print(eval.results)
+
+#Accuracy of this model is 0.89
+```
+
+
+
+
+
+
+
 
 
 ### Create Models to examine whether two features interact using linear regression
