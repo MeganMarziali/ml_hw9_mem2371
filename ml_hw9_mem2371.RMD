@@ -1,0 +1,165 @@
+---
+title: "Homework 9"
+author: "Megan Marziali"
+date: "3/17/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Demonstrate Interaction using Regression Models and Tree-based Methods using Exposome Data from HELIX
+
+### Load .Rdata file and merge into single data frame
+
+Loading data into single data frame.
+
+```{r dataprep}
+library(tidyverse)
+library(caret)
+library(rpart.plot)
+library(Amelia)
+library(arsenal)
+
+#Load data using path of where file is stored
+load("./data/exposome.RData")
+
+#Merge all data frames into a single data frame. FYI, this is just a shortcut by combining baseR with piping from tidyverse. There are other ways of merging across three data frames that are likely more elegant.
+
+studydata = 
+  merge(exposome,phenotype,by = "ID") %>% 
+  merge(covariates, by = "ID")
+
+#Strip off ID Variable
+studydata$ID = NULL
+```
+
+Data cleaning.
+
+```{r}
+studydata  = studydata %>% 
+  janitor::clean_names()
+
+summary(studydata)
+```
+
+Data exploration.
+
+```{r}
+# Investigating missing data
+missmap(studydata)
+
+# No missingness observed.
+
+# Exploring continuous/categorical variables of interest
+table.1 = tableby(~ hs_gen_tot + hs_no2_wk_hs_h_log + h_pm_log +
+                    h_folic_t1_none + fas_cat_none + hs_hm_pers_none + hs_participation_3cat_none,
+                  data = studydata,
+        numeric.stats = c("mean","median", "range"))
+summary(table.1, text = TRUE)
+
+```
+
+The outcome that I am choosing to explore is related to neuro behavior, and internalizing/externalizing behaviors at 6-11 years old via the CBCL scale. The mean of this score is 24.4, median of 20 and a range from 0-133.
+
+I chose to explore a few variables related to air pollution, including NO2 concentration (mean: 2.86, median: 2.98; range: 0.95 - 4.81). I also opted to explore concentration of particulate matter (mean: 2.44; median: 2.30; range: 1.55 - 5.24). Within this sample, 53.4% (N=695) of mothers consumed folic acid during pregnancy. 51.4% (N=669) of mothers scored high on the family affluence score. The median number of people leaving in the home was 4 (range: 1-10). The majority (57.5%, N=748) of mothers did not participate in any organizations.
+
+Partitioning data.
+
+```{r}
+#Partition data for use in demonstration
+train.indices = createDataPartition(y = studydata$e3_bw,p = 0.7,list = FALSE)
+train.data = studydata[train.indices, ]
+test.data = studydata[-train.indices, ]
+```
+
+
+### Create Models to examine whether two features interact using linear regression
+
+Note I'm not scaling before running my glm models. If this were a prediction question, I would likely scale so that my coefficients would be interpretable for variable importance. But this is just to show how one codes interaction terms in R using glm. Would be similar if you used within the caret framework. I'm also showing how you would code interaction terms within an elastic net framework using caret.
+
+You can replace the features here with features from your own research question if you'd like to being exploring interactions using linear regression.
+
+```{r}
+#Model 1: Three features, indoor NO2, building density and walkability metric, in relation to child birthweight (I'm assuming measures are consistent pre and postnatal. Likely a bad assumption but just for illustrative purposes)
+
+model.1<-glm(e3_bw~h_NO2_Log+h_builtdens300_preg_Sqrt+h_walkability_mean_preg_None, data=train.data) 
+summary(model.1)
+
+#Model 2a: Including an interaction term between two features
+model.2a<-glm(e3_bw~h_NO2_Log+h_builtdens300_preg_Sqrt+h_walkability_mean_preg_None+h_NO2_Log*h_builtdens300_preg_Sqrt, data=train.data)
+summary(model.2a)
+
+#Model 2b: Including all combinations of two-way interactions using shortcut
+model.2b<-glm(e3_bw~(h_NO2_Log+h_builtdens300_preg_Sqrt+h_NO2_Log+h_walkability_mean_preg_None)^2, data=train.data)
+summary(model.2b)
+
+#Model 3: Using the caret framework to run an elastic-net with interaction terms between features
+
+set.seed(100)
+
+model.3<- train(
+  e3_bw ~(h_NO2_Log+h_builtdens300_preg_Sqrt+h_NO2_Log+h_walkability_mean_preg_None)^2, data = train.data, preProcess="scale", method = "glmnet",
+  trControl = trainControl("cv", number = 5),
+ tuneLength=10
+  )
+#Print the values of alpha and lambda that gave best prediction
+model.3$bestTune
+
+coef(model.3$finalModel, model.3$bestTune$lambda)
+
+model.3.pred <- model.3 %>% predict(test.data)
+
+# Model prediction performance
+data.frame(
+  RMSE = RMSE(model.3.pred, test.data$e3_bw),
+  Rsquare = R2(model.3.pred, test.data$e3_bw)
+)
+
+```
+
+### Implement Random forest first then tree
+
+Note, I'm not showing any other aspects of the pipeline. In the real-world, I would think about whether my findings replicate in holdout data. 
+
+Here, I'm demonstrating using all of the exposome features. Please note this is completely inappropriate as some features are measured after birth, there are correlations between features, etc. This is *just* to demonstrate the code.
+
+
+```{r}
+#Creating new dataframe that only includes exposome and birthweight
+set.seed(100)
+studydata.2<-merge(exposome,phenotype[,1:2],by="ID") 
+studydata.2$ID<-NULL
+
+set.seed(100)
+
+#Note, I'm only running 2 folds for time. Typically, this is 5 or 10.
+train.control.rf<-trainControl(method="cv", number=2)
+
+rf.output<-train(e3_bw ~., data=studydata.2, method="rf",trControl=train.control.rf, ntree=100)
+
+rf.output$results
+
+varImp(rf.output)
+
+#Extract names of variables for importance, ordering by overall importance with largest at top
+col_index <- varImp(rf.output)$importance %>% 
+  mutate(names=row.names(.)) %>%
+  arrange(-Overall)
+
+#Restrict to just top 20 and add in outcome variable
+tree.vars<-col_index$names[1:20]
+tree.vars[21]<-"e3_bw"
+
+#Subset data to include only the top 20 most important features and outcome
+tree.data<-studydata.2[,tree.vars]
+
+#Fit tree to data, using a set cp for demonstration purposes
+tree.exposome<-train(e3_bw~., data=tree.data, method="rpart",trControl=trainControl(method="cv", number = 5), tuneGrid=expand.grid(cp=0.01))
+
+tree.exposome
+rpart.plot(tree.exposome$finalModel)
+```
+
+
