@@ -2,7 +2,7 @@
 title: "Homework 9"
 author: "Megan Marziali"
 date: "3/17/2021"
-output: html_document
+output: word_document
 ---
 
 ```{r setup, include=FALSE}
@@ -15,7 +15,7 @@ knitr::opts_chunk$set(echo = TRUE)
 
 Loading data into single data frame.
 
-```{r dataprep}
+```{r dataprep, message = FALSE, warning = FALSE}
 library(tidyverse)
 library(caret)
 library(rpart.plot)
@@ -35,19 +35,68 @@ studydata =
 studydata$ID = NULL
 ```
 
-Data cleaning.
+Data cleaning, and removing non-modifiable variables from the possible features.
 
-```{r}
+```{r message = FALSE, warning = FALSE}
 data.rec  = studydata %>% 
   janitor::clean_names() %>% 
   mutate(
-    behav = 
-      as.factor(
-        case_when(
-          hs_gen_tot < 60 ~ "0",
-          hs_gen_tot >= 60 ~ "1"))
+    hs_asthma = as.factor(hs_asthma)
   ) %>% 
-  select(-hs_gen_tot,
+  select(-h_accesslines300_preg_dic0,
+         -h_accesspoints300_preg_log,
+         -h_builtdens300_preg_sqrt,
+         -h_connind300_preg_sqrt,
+         -h_fdensity300_preg_log,
+         -h_frichness300_preg_none,
+         -h_landuseshan300_preg_none,
+         -h_popdens_preg_sqrt,
+         -hs_accesslines300_h_dic0,
+         -h_walkability_mean_preg_none,
+         -hs_accesspoints300_h_log,
+         -hs_builtdens300_h_sqrt,
+         -hs_connind300_h_log,
+         -hs_fdensity300_h_log,
+         -hs_landuseshan300_h_none,
+         -hs_popdens_h_sqrt,
+         -hs_walkability_mean_h_none,
+         -hs_accesslines300_s_dic0,
+         -hs_accesspoints300_s_log,
+         -hs_builtdens300_s_sqrt,
+         -hs_connind300_s_log,
+         -hs_fdensity300_s_log,
+         -hs_landuseshan300_s_none,
+         -hs_popdens_s_sqrt,
+         -h_humidity_preg_none,
+         -h_pressure_preg_none,
+         -h_temperature_preg_none,
+         -hs_hum_mt_hs_h_none,
+         -hs_tm_mt_hs_h_none,
+         -hs_uvdvf_mt_hs_h_none,
+         -hs_hum_dy_hs_h_none,
+         -hs_hum_wk_hs_h_none,
+         -hs_tm_dy_hs_h_none,
+         -hs_tm_wk_hs_h_none,
+         -hs_uvdvf_dy_hs_h_none,
+         -hs_uvdvf_wk_hs_h_none,
+         -hs_blueyn300_s_none,
+         -h_blueyn300_preg_none,
+         -h_greenyn300_preg_none,
+         -h_ndvi100_preg_none,
+         -hs_greenyn300_s_none,
+         -hs_blueyn300_h_none,
+         -hs_greenyn300_h_none,
+         -hs_ndvi100_h_none,
+         -hs_ndvi100_s_none,
+         -h_lden_cat_preg_none,
+         -hs_ln_cat_h_none,
+         -hs_lden_cat_s_none,
+         -h_distinvnear1_preg_log,
+         -h_trafload_preg_pow1over3,
+         -h_trafnear_preg_pow1over3,
+         -hs_trafload_h_pow1over3,
+         -hs_trafnear_h_pow1over3,
+         -hs_gen_tot,
          -hs_c_height_none,
          -hs_c_weight_none,
          -e3_gac_none,
@@ -57,39 +106,36 @@ data.rec  = studydata %>%
          -h_cohort,
          -h_parity_none,
          -hs_child_age_none,
-         -hs_asthma,
          -hs_zbmi_who,
          -hs_correct_raven,
          -hs_bmi_c_cat)
-
-summary(data.rec)
 ```
 
 Data exploration.
 
-```{r}
+```{r message = FALSE, warning = FALSE, results = "asis"}
 # Investigating missing data
 missmap(studydata)
 
 # No missingness observed.
 
 # Exploring continuous/categorical variables of interest
-table.1 = tableby(~ behav + hs_no2_wk_hs_h_log + h_pm_log +
+table.1 = tableby(~ hs_asthma + hs_no2_wk_hs_h_log + h_pm_log +
                     h_folic_t1_none + fas_cat_none + hs_hm_pers_none + hs_participation_3cat_none,
                   data = data.rec,
         numeric.stats = c("mean","median", "range"))
 summary(table.1, text = TRUE)
 ```
 
-The outcome that I am choosing to explore is related to neuro-behavior, and internalizing/externalizing behaviors at 6-11 years old via the CBCL scale. I have dichotomized the scale at 60, which is a value used in previous research for identifying clinically relevant psychopathology (Biederman et al., 2010).
-
-I chose to explore a few variables related to air pollution, including NO2 concentration (mean: 2.86, median: 2.98; range: 0.95 - 4.81). I also opted to explore concentration of particulate matter (mean: 2.44; median: 2.30; range: 1.55 - 5.24). Within this sample, 53.4% (N=695) of mothers consumed folic acid during pregnancy. 51.4% (N=669) of mothers scored high on the family affluence score. The median number of people leaving in the home was 4 (range: 1-10). The majority (57.5%, N=748) of mothers did not participate in any organizations.
+I chose to explore a few variables related to asthma and air pollution, including NO2 concentration (mean: 2.86, median: 2.98; range: 0.95 - 4.81). I also opted to explore concentration of particulate matter (mean: 2.44; median: 2.30; range: 1.55 - 5.24). Within this sample, 53.4% (N=695) of mothers consumed folic acid during pregnancy. 51.4% (N=669) of mothers scored high on the family affluence score. The median number of people leaving in the home was 4 (range: 1-10). The majority (57.5%, N=748) of mothers did not participate in any organizations.
 
 Partitioning data.
 
-```{r}
+```{r message = FALSE, warning = FALSE}
+set.seed(100)
+
 #Partition data for use in demonstration
-train.indices = createDataPartition(y = data.rec$behav, p = 0.7,list = FALSE)
+train.indices = createDataPartition(y = data.rec$hs_asthma, p = 0.7,list = FALSE)
 training = data.rec[train.indices, ]
 testing = data.rec[-train.indices, ]
 ```
@@ -98,7 +144,7 @@ testing = data.rec[-train.indices, ]
 
 ## Developing research question
 
-Given available data, and the number of features, my research question of interest will be hypothesis generating. This analysis will aim to determine potential risk factors of internalizing/externalizing behaviors at 6-11 years old, assessed via the CBCL scale.
+Given available data, and the number of features, my research question of interest will be hypothesis generating. This analysis will aim to determine potential risk factors of asthma at 6-11 years old.
 
 # Question 3
 
@@ -111,10 +157,10 @@ set.seed(100)
 lambda = 10^seq(-3,3, length = 100)
 
 lasso.m = train(
-  behav ~., 
+  hs_asthma ~., 
   data = training, 
   method = "glmnet", 
-  trControl = trainControl("cv", number = 10), 
+  trControl = trainControl("cv", number = 10, sampling = "down"), 
   tuneGrid = expand.grid(alpha = 0, lambda = lambda)
 )
 
@@ -133,105 +179,26 @@ pred.lasso = predict(lasso.m, training)
 pred.lasso.prob = predict(lasso.m, training, type = "prob")
 
 # Model prediction performance
-eval.results = confusionMatrix(pred.lasso, training$behav, positive = "1")
+eval.results = confusionMatrix(pred.lasso, training$hs_asthma, positive = "1")
 print(eval.results)
 
-#Accuracy of this model is 0.89
+#Accuracy of this model is 0.62
 ```
 
+## Final accuracy testing
 
-
-
-
-
-
-
-
-### Create Models to examine whether two features interact using linear regression
-
-Note I'm not scaling before running my glm models. If this were a prediction question, I would likely scale so that my coefficients would be interpretable for variable importance. But this is just to show how one codes interaction terms in R using glm. Would be similar if you used within the caret framework. I'm also showing how you would code interaction terms within an elastic net framework using caret.
-
-You can replace the features here with features from your own research question if you'd like to being exploring interactions using linear regression.
-
-```{r}
-#Model 1: Three features, indoor NO2, building density and walkability metric, in relation to child birthweight (I'm assuming measures are consistent pre and postnatal. Likely a bad assumption but just for illustrative purposes)
-
-model.1<-glm(e3_bw~h_NO2_Log+h_builtdens300_preg_Sqrt+h_walkability_mean_preg_None, data=train.data) 
-summary(model.1)
-
-#Model 2a: Including an interaction term between two features
-model.2a<-glm(e3_bw~h_NO2_Log+h_builtdens300_preg_Sqrt+h_walkability_mean_preg_None+h_NO2_Log*h_builtdens300_preg_Sqrt, data=train.data)
-summary(model.2a)
-
-#Model 2b: Including all combinations of two-way interactions using shortcut
-model.2b<-glm(e3_bw~(h_NO2_Log+h_builtdens300_preg_Sqrt+h_NO2_Log+h_walkability_mean_preg_None)^2, data=train.data)
-summary(model.2b)
-
-#Model 3: Using the caret framework to run an elastic-net with interaction terms between features
-
+```{r message = FALSE, warning = FALSE}
 set.seed(100)
 
-model.3<- train(
-  e3_bw ~(h_NO2_Log+h_builtdens300_preg_Sqrt+h_NO2_Log+h_walkability_mean_preg_None)^2, data = train.data, preProcess="scale", method = "glmnet",
-  trControl = trainControl("cv", number = 5),
- tuneLength=10
-  )
-#Print the values of alpha and lambda that gave best prediction
-model.3$bestTune
+# Using best fit model from above with testing data
+pred.lasso.f = predict(lasso.m, testing)
+pred.lasso.f.prob = predict(lasso.m, testing, type = "prob")
 
-coef(model.3$finalModel, model.3$bestTune$lambda)
-
-model.3.pred <- model.3 %>% predict(test.data)
-
-# Model prediction performance
-data.frame(
-  RMSE = RMSE(model.3.pred, test.data$e3_bw),
-  Rsquare = R2(model.3.pred, test.data$e3_bw)
-)
-
+# Evaluating in testing data with confusion matrix
+eval.results = confusionMatrix(pred.lasso.f, testing$hs_asthma, positive = "1")
+print(eval.results)
 ```
 
-### Implement Random forest first then tree
+Final accuracy testing shows that the accuracy of this model is 0.59.
 
-Note, I'm not showing any other aspects of the pipeline. In the real-world, I would think about whether my findings replicate in holdout data. 
-
-Here, I'm demonstrating using all of the exposome features. Please note this is completely inappropriate as some features are measured after birth, there are correlations between features, etc. This is *just* to demonstrate the code.
-
-
-```{r}
-#Creating new dataframe that only includes exposome and birthweight
-set.seed(100)
-studydata.2<-merge(exposome,phenotype[,1:2],by="ID") 
-studydata.2$ID<-NULL
-
-set.seed(100)
-
-#Note, I'm only running 2 folds for time. Typically, this is 5 or 10.
-train.control.rf<-trainControl(method="cv", number=2)
-
-rf.output<-train(e3_bw ~., data=studydata.2, method="rf",trControl=train.control.rf, ntree=100)
-
-rf.output$results
-
-varImp(rf.output)
-
-#Extract names of variables for importance, ordering by overall importance with largest at top
-col_index <- varImp(rf.output)$importance %>% 
-  mutate(names=row.names(.)) %>%
-  arrange(-Overall)
-
-#Restrict to just top 20 and add in outcome variable
-tree.vars<-col_index$names[1:20]
-tree.vars[21]<-"e3_bw"
-
-#Subset data to include only the top 20 most important features and outcome
-tree.data<-studydata.2[,tree.vars]
-
-#Fit tree to data, using a set cp for demonstration purposes
-tree.exposome<-train(e3_bw~., data=tree.data, method="rpart",trControl=trainControl(method="cv", number = 5), tuneGrid=expand.grid(cp=0.01))
-
-tree.exposome
-rpart.plot(tree.exposome$finalModel)
-```
-
-
+Risk factors show that undetectable thallium levels in the mother is the most important predictor, which tells me that something about this model isn't quite right. Other important predictors of asthma show that PM25 absorbance the year before the examination, fruit and vegetable intake, and PM absorbance.
